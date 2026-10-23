@@ -1,0 +1,20 @@
+[versions]
+agp = "9.2.1"
+kotlin = "2.2.10"
+coroutines = "1.9.0"
+
+compileSdk = "36"
+minSdk = "24"
+targetSdkModern = "36"
+targetSdkLegacy = "28"
+
+ndk = "27.2.12479018"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

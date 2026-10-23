@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  loopback 明文放行：Android 9+ 默认禁明文，WebView / HttpURLConnection 访问 127.0.0.1 必须显式放行。
+  这就是消费方在「WebView + 本地 HTTP 服务」形态下必须做的那一条（规划 §6.3）。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

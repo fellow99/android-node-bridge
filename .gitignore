@@ -33,3 +33,13 @@ google-services.json
 
 # Android Profiling
 *.hprof
+# ── android-node-bridge：运行时二进制不入库（由 tools/provision.mjs 投放）──
+node-runtime/src/main/jniLibs/
+node-runtime/include/
+node-bridge/src/main/jniLibs/
+node-bridge/src/main/assets/node-bridge/
+runtime-build/
+*.tgz
+
+# 本地真机证据（由 tools/collect-evidence.sh 产出）
+docs/evidence/
