@@ -1,0 +1,22 @@
+# ── 发布凭据模板（用户级；复制内容追加到 C:\Users\fello\.gradle\gradle.properties）──
+# ⚠️ 本文件只是示例，真实值永远写在用户级 ~/.gradle/gradle.properties（不在任何仓库里）
+
+# ① Central Portal「Publishing Sign-In」生成的 Token（注册后在
+#    https://central.sonatype.org → Profile → Publishing Sign-In 复制）
+mavenCentralUsername=
+mavenCentralPassword=
+
+# ② GPG（Maven Central 强制签名；公钥需已上传 keybase.io / keys.openpgp.org）
+#    gpg --list-secret-keys --keyid-format short  查 KeyID
+signing.keyId=
+signing.password=
+# 二选一：
+#  a) 指向 gpg agent 管理的密钥环文件（Windows GnuPG 4.0 默认在
+#     C:\Users\fello\AppData\Local\gnupg\ 或 git-bash gpg2 的 ~/.gnupg）
+signing.secretKeyRingFile=C\:\Users\fello\.gnupg\secring.gpg
+#  b) 或免文件：signing.inMemory=true + signing.keyData=<-----BEGIN PGP PRIVATE KEY BLOCK----- 内容>
+#signing.inMemory=true
+#signing.keyData=
+
+# ③ 发布开关（true 时 publish 任务才允许执行）
+RELEASE=true
