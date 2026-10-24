@@ -1,6 +1,6 @@
 // publish.gradle.kts —— 发布面共享配置（由 node-bridge / node-runtime 的 build.gradle.kts apply）。
 //
-// 插件：com.vanniktech:gradle-maven-publish-plugin 0.33.0
+// 插件：com.vanniktech:gradle-maven-publish-plugin 0.37.0
 //   各模块 build.gradle.kts 的 buildscript 已把「AGP + 本插件」放进项目 classpath，
 //   因此本脚本里可直接引用插件类型（Kotlin DSL）。
 //
@@ -10,13 +10,14 @@
 //   - 版本号：node-bridge = VERSION_NAME；node-runtime = NODE_VERSION（子模块 afterEvaluate 覆盖）
 //   - 坐标：groupId = 模块 android.namespace；artifactId = 模块名
 
-// 插件 jar 在模块 buildscript classpath：用该 classloader 取类并 apply（脚本自身 classloader 看不到它）
-val buildscriptLoader = project.buildscript.classLoader
-val basePluginClass = Class.forName("com.vanniktech.maven.publish.MavenPublishBasePlugin", true, buildscriptLoader)
-val basePluginCtor = basePluginClass.getDeclaredConstructor()
-basePluginCtor.isAccessible = true
-val basePluginApply = basePluginClass.getMethod("apply", org.gradle.api.Project::class.java)
-basePluginApply.invoke(basePluginCtor.newInstance(), project)
+// 插件 jar 在模块 buildscript classpath：用该 classloader 取类并 apply（脚本自身 classloader 看不到它）。
+// 0.37.0 起插件类为 abstract（Kotlin 编译细节）：直接 newInstance 不可用，
+// 用 JDK 动态代理实现 Plugin 接口，apply(Project) 里反射调真实插件类的 apply 逻辑。
+// 注意：真实类是 abstract 但 apply 是 concrete 实例方法 —— 代理无法调实例方法，
+// 因此改用「字节码层面不可行 → 回退 0.33.0」或「让 Gradle 自己加载插件 id」。
+// 最终方案：把插件 classpath 加到 settings 的 pluginManagement，用正式 id apply。
+// 见 settings.gradle.kts 的 buildscript 段。此处不再手动反射。
+println("[publish] 插件经 settings pluginManagement 加载（id=com.vanniktech.maven.publish.base）")
 
 apply(plugin = "signing")
 
@@ -44,24 +45,34 @@ val artifactId = project.name
 val versionName = providers.gradleProperty("VERSION_NAME").orNull ?: "0.1.0"
 mp("coordinates", "io.github.fellow99", artifactId, versionName)
 mp("pomFromGradleProperties")
-// 发布目标：Central Portal（新版 https://central.sonatype.com，直接 POST，无 OSSRH staging 流程）。
-// 0.33.0 的 (boolean) 重载会被 Kotlin synthetic 方法干扰（反射按名匹配漂到 (SonatypeHost) 版），
-// 按签名精确取 (boolean) 方法调用：
-val ptmcBoolMethod = mavenPublishingExt.javaClass.methods
-    .first { it.name == "publishToMavenCentral"
-        && it.parameterCount == 1
-        && it.parameterTypes[0] == java.lang.Boolean.TYPE }
+
+// 发布目标：Central Portal（0.37.0 起 publishToMavenCentral 直连 central.sonatype.com，
+// 无 OSSRH staging 流程）。签名 (boolean requiresToken, DeploymentValidation validation)。
+// requiresToken=false（配置期不强制 Token，任务执行前另有下方 enabled 门禁）；validation=null 走默认。
+// 双 primitive 重载 (boolean, boolean)：第一参 requiresToken，第二参 = 是否验证 deployment。
+// 用 (false, false)：配置期不强制 Token、不做 deployment 验证（任务执行前另有 enabled 门禁）。
+val ptmc2BoolMethod = mavenPublishingExt.javaClass.methods
+    .first { it.name == "publishToMavenCentral" && it.parameterCount == 2
+        && it.parameterTypes[0] == java.lang.Boolean.TYPE
+        && it.parameterTypes[1] == java.lang.Boolean.TYPE }
 try {
-    ptmcBoolMethod.invoke(mavenPublishingExt, java.lang.Boolean.FALSE)
+    ptmc2BoolMethod.invoke(mavenPublishingExt, java.lang.Boolean.FALSE, java.lang.Boolean.FALSE)
 } catch (e: java.lang.reflect.InvocationTargetException) {
     throw e.targetException
 }
 mp("signAllPublications")
 // 单 variant：release + sources jar（必须在 AGP 求值前）；构造器为 (String, boolean, boolean)
 val svClass = Class.forName("com.vanniktech.maven.publish.AndroidSingleVariantLibrary", true, project.buildscript.classLoader)
-val svCtor = svClass.constructors.first()
-svCtor.isAccessible = true
-val singleVariant = svCtor.newInstance("release", java.lang.Boolean.valueOf(true))
+// 0.37.0 构造器：(JavadocJar, SourcesJar, String variant)
+val javadocJarNone: Any = Class.forName("com.vanniktech.maven.publish.JavadocJar\$None", true, project.buildscript.classLoader)
+    .getDeclaredConstructor().apply { isAccessible = true }.newInstance()
+val sourcesJar: Any = Class.forName("com.vanniktech.maven.publish.SourcesJar\$Sources", true, project.buildscript.classLoader)
+    .getDeclaredConstructor().apply { isAccessible = true }.newInstance()
+val svCtor = svClass.getConstructor(
+    Class.forName("com.vanniktech.maven.publish.JavadocJar", true, project.buildscript.classLoader),
+    Class.forName("com.vanniktech.maven.publish.SourcesJar", true, project.buildscript.classLoader),
+    String::class.java)
+val singleVariant = svCtor.newInstance(javadocJarNone, sourcesJar, "release")
 mp("configure", singleVariant)
 
 val releaseEnabled = providers.gradleProperty("RELEASE").orNull?.toBoolean() == true
@@ -107,6 +118,27 @@ afterEvaluate {
             }
         } finally {
             tmp.delete()
+        }
+    }
+}
+
+// ── POM SCM url 补丁（Central Portal 强制要求 <scm><url>）────────────────────
+// pomFromGradleProperties 只填 connection/developerConnection，不填 url。
+// 在 generatePom 任务 doLast 里直接改 XML。
+tasks.configureEach {
+    if (name.startsWith("generatePomFile")) {
+        doLast {
+            // 实际路径：build/publications/maven/pom-default.xml
+            val realPom = layout.buildDirectory.file("publications/maven/pom-default.xml").get().asFile
+            if (realPom.exists()) {
+                var xml = realPom.readText()
+                if ("<scm>" in xml && "<url>" !in xml.substring(xml.indexOf("<scm>"), xml.indexOf("</scm>"))) {
+                    val urlTag = "    <url>https://github.com/fellow99/aosp-node-bridge</url>\n  </scm>"
+                    xml = xml.replaceFirst("</scm>", urlTag)
+                    realPom.writeText(xml)
+                    println("[publish] POM SCM url 已补: $realPom")
+                }
+            }
         }
     }
 }

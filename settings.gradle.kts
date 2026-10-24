@@ -4,6 +4,11 @@
 //      仓库顺序对 CI 无害（镜像 404 时自动回退到官方仓库）。
 
 pluginManagement {
+    // 发布插件（com.vanniktech.maven.publish）：两模块共享，版本统一在此。
+    // 0.37.0 = Central Portal 直传（无 OSSRH staging 流程）。
+    plugins {
+        id("com.vanniktech.maven.publish.base") version "0.37.0"
+    }
     repositories {
         maven("https://maven.aliyun.com/repository/gradle-plugin")
         maven("https://maven.aliyun.com/repository/google")

@@ -1,20 +1,8 @@
-buildscript {
-    // 发布插件 classpath（AGP 由 settings 的 pluginManagement 统一供给，勿在此重复声明）
-    repositories {
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/public")
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.vanniktech:gradle-maven-publish-plugin:0.33.0")
-    }
-}
-
 plugins {
     alias(libs.plugins.android.library)
     // 注意：**不应用** org.jetbrains.kotlin.android —— AGP 9 自带 Kotlin 支持（builtInKotlin 默认 true），
     // 再应用 KGP 会与之争抢名为 `kotlin` 的 extension。
+    id("com.vanniktech.maven.publish.base")
 }
 
 apply(from = rootProject.file("publish.gradle.kts"))

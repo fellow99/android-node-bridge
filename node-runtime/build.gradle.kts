@@ -1,18 +1,6 @@
-buildscript {
-    // 与 node-bridge 相同：发布插件 classpath（见 node-bridge/build.gradle.kts 注释）
-    repositories {
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/public")
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.vanniktech:gradle-maven-publish-plugin:0.33.0")
-    }
-}
-
 plugins {
     alias(libs.plugins.android.library)
+    id("com.vanniktech.maven.publish.base")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
