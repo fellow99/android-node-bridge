@@ -1,4 +1,4 @@
-// publish.gradle.kts —— 发布面共享配置（由 node-bridge / node-runtime 的 build.gradle.kts apply）。
+// publish.gradle.kts —— 发布面共享配置（由 node-bridge 的 build.gradle.kts apply）。
 //
 // 插件：com.vanniktech:gradle-maven-publish-plugin 0.37.0
 //   各模块 build.gradle.kts 的 buildscript 已把「AGP + 本插件」放进项目 classpath，
@@ -37,12 +37,11 @@ fun mp(name: String, vararg args: Any?) {
     }
 }
 // 坐标：groupId 固定 io.github.fellow99（与 README/规划一致）。
-// version：node-bridge = VERSION_NAME；node-runtime = NODE_VERSION（= Node 版本，
+// version：node-bridge = VERSION_NAME
 // 由 tools/provision.mjs 与 runtime.lock.json 做一致性断言）。
 val artifactId = project.name
 // 版本：node-bridge = VERSION_NAME（自身 semver）；
-//       node-runtime 的坐标 version 在模块 build.gradle.kts 里经 project.version + publication 覆写为 NODE_VERSION。
-val versionName = providers.gradleProperty("VERSION_NAME").orNull ?: "0.1.0"
+val versionName = providers.gradleProperty("VERSION_NAME").orNull ?: project.version.toString()
 mp("coordinates", "io.github.fellow99", artifactId, versionName)
 mp("pomFromGradleProperties")
 

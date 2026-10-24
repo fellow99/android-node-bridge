@@ -38,22 +38,11 @@ for (const f of fs.readdirSync(payloadDir).filter((x) => x.endsWith('.js'))) {
   else bad(`${f}: ${(r.stderr || '').split('\n')[0]}`);
 }
 
-// ② ELF 门禁（复用 provision --check；16 KB 未对齐时允许 --allow-page-align-4k 由调用方决定）
+// ② ELF 门禁：runtime 已分离到 aosp-node-bridge 仓库，此处跳过
 section('② 运行时八项 ELF 门禁');
-const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'runtime.lock.json'), 'utf8'));
-const target = path.join(ROOT, 'node-runtime/src/main/jniLibs', lock.active.abi, 'libnode.so');
-if (!fs.existsSync(target)) {
-  bad(`未投放运行时：${target}（先 node tools/provision.mjs --out … --from …）`);
-} else {
-  const allow4k = process.argv.includes('--allow-page-align-4k');
-  const provArgs = [path.join(ROOT, 'tools/provision.mjs'), '--check'];
-  if (allow4k) provArgs.push('--allow-page-align-4k');
-  const r = spawnSync(process.execPath, provArgs, { encoding: 'utf8' });
-  process.stdout.write(r.stdout || '');
-  if (r.status === 0) ok(allow4k ? '门禁全过（16 KB 页对齐已被显式放宽：仅 bring-up）' : '门禁全过');
-  else if (r.status === 2) bad('门禁不合格（加 --allow-page-align-4k 可在 bring-up 阶段放行 16 KB 页对齐）');
-  else bad(`provision --check 异常退出 ${r.status}`);
-}
+// runtime 已分离：libnode.so 门禁在 aosp-node-runtime 仓库执行
+log('② ELF 门禁：跳过（runtime 已分离到 aosp-node-runtime 仓库）');
+// （原 provision --check 逻辑已移除）
 
 // ③ 桥的 JSON 契约（纯 JS 复刻 Kotlin NodeHostBridge 的三条语义）
 section('③ 宿主桥 JSON 契约');

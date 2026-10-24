@@ -31,5 +31,4 @@ dependencyResolutionManagement {
 rootProject.name = "aosp-node-bridge"
 
 include(":node-bridge")
-include(":node-runtime")
 include(":samples:minimal-app")

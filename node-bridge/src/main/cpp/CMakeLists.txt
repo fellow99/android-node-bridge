@@ -20,20 +20,20 @@ target_compile_options(node_bridge PRIVATE -Wall -Wextra -fvisibility=hidden)
 target_link_options(node_bridge PRIVATE -Wl,-soname,libnode_bridge.so)
 target_link_libraries(node_bridge PRIVATE log dl android)
 
-# ── NAPI addon（需要 Node 头文件 + libnode.so）──────────────────────────────────
-set(NODE_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../node-runtime/include/node" CACHE PATH "Node headers")
-set(LIBNODE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../node-runtime/src/main/jniLibs/arm64-v8a" CACHE PATH "libnode.so 所在目录")
+# ── NAPI addon（需要 Node 头文件；libnode.so 运行期 dlopen，编译期只需头文件）────────
+# 头文件随 bridge 仓库自带（NAPI 是稳定 ABI，node_api.h 跨 Node 大版本极少变动）。
+# libnode.so 不入库：node_host_client 的 napi_* 符号留作未定义（-z undefs），
+# 运行期由已 dlopen 的 libnode.so（RTLD_GLOBAL）解析。
+set(NODE_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/node" CACHE PATH "Node NAPI headers")
 
-if(EXISTS "${NODE_INCLUDE_DIR}/node_api.h" AND EXISTS "${LIBNODE_DIR}/libnode.so")
+if(EXISTS "${NODE_INCLUDE_DIR}/node_api.h")
   add_library(node_host_client SHARED node_host_client.c)
   target_include_directories(node_host_client PRIVATE "${NODE_INCLUDE_DIR}")
   target_compile_options(node_host_client PRIVATE -Wall -Wextra -fvisibility=hidden)
   target_link_options(node_host_client PRIVATE
     -Wl,-soname,libnode_host_client.so
-    -Wl,--no-as-needed
-    -L${LIBNODE_DIR}
-    -l:libnode.so)
+    -Wl,-z,undefs)
   target_link_libraries(node_host_client PRIVATE log)
 else()
-  message(WARNING "跳过 node_host_client：缺 ${NODE_INCLUDE_DIR}/node_api.h 或 ${LIBNODE_DIR}/libnode.so（先跑 tools/provision.mjs）")
+  message(WARNING "跳过 node_host_client：缺 ${NODE_INCLUDE_DIR}/node_api.h")
 endif()

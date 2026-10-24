@@ -110,15 +110,12 @@ function main() {
   ]);
   log(`✔ ${bridge} (${fs.statSync(bridge).size} B)`);
 
-  // ② NAPI addon（需要 Node 头 + libnode.so 才有意义）
-  const includeDir = path.join(ROOT, 'node-runtime/include/node');
-  const libnodeDir = path.join(ROOT, 'node-runtime/src/main/jniLibs', ABI);
+  // ② NAPI addon（头文件随仓库自带；napi_* 留作未定义符号，运行期由 dlopen 的 libnode.so 解析）
+  const includeDir = path.join(ROOT, 'node-bridge/src/main/cpp/include/node');
   const haveHeaders = fs.existsSync(path.join(includeDir, 'node_api.h'));
-  const haveLibnode = fs.existsSync(path.join(libnodeDir, 'libnode.so'));
 
-  if (!haveHeaders || !haveLibnode) {
-    log(`跳过 node_host_client：${!haveHeaders ? '缺 Node 头(node-runtime/include/node) ' : ''}${!haveLibnode ? `缺 ${libnodeDir}/libnode.so` : ''}`);
-    log('修法：node tools/provision.mjs --out node-runtime/src/main/jniLibs --include-headers');
+  if (!haveHeaders) {
+    log(`跳过 node_host_client：缺 Node NAPI 头(${includeDir})`);
     return;
   }
 
@@ -127,14 +124,13 @@ function main() {
     '-shared', '-fPIC', '-O2', '-Wall', '-fvisibility=hidden',
     `-I${includeDir}`,
     '-Wl,-soname,libnode_host_client.so',
-    '-Wl,--no-as-needed',
-    `-L${libnodeDir}`, '-l:libnode.so',
+    '-Wl,-z,undefs',
     '-o', client,
     path.join(ROOT, 'node-bridge/src/main/cpp/node_host_client.c'),
     '-llog',
   ]);
   log(`✔ ${client} (${fs.statSync(client).size} B)`);
-  log('提示：addon 的 DT_NEEDED 必须含 libnode.so（Android linker 靠它连接引擎与 addon）');
+  log('提示：napi_* 符号留作未定义（-z undefs），运行期由已 dlopen 的 libnode.so（RTLD_GLOBAL）解析');
 }
 
 try {

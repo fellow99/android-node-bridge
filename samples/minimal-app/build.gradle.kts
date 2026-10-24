@@ -62,5 +62,4 @@ android {
 dependencies {
     implementation(project(":node-bridge"))
     // 引擎包：只装 libnode.so（+ libc++_shared.so）。换 Node 版本不需要动业务代码。
-    runtimeOnly(project(":node-runtime"))
 }
