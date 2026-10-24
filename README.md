@@ -1,90 +1,123 @@
 # aosp-node-bridge
 
-> **一句话**：把**真正的 Node.js 运行时**以 `JNI 引导 + dlopen + node::Start` 的形态嵌进 **Android 应用自己的进程**，
-> 拆成两个可发布的 AAR —— **`node-bridge`**（接口 + 加载器）与 **`node-runtime`**（只装引擎 `libnode.so`）。
-> 结构对标 [`ohos-node-bridge`](https://github.com/fellow99/ohos-node-bridge)（`node-runtime` + `node-bridge` 双包）。
+[**English**](README.md) · [中文](README_zh.md)
 
-工程规划（唯一权威）：[`docs/000-工程规划.md`](docs/000-工程规划.md) · 真机记录：[`docs/002-真机验证记录.md`](docs/002-真机验证记录.md)
+Embed a **real Node.js runtime inside your Android app's own process** — not a WebView, not a remote service, not a separate binary. Node runs in-process via a JNI bootstrap that calls `dlopen("libnode.so")` + `node::Start`, with a bidirectional bridge between JavaScript and Kotlin.
 
-## 目录
+The runtime engine ships as a **separate package** ([aosp-node-runtime](https://github.com/fellow99/aosp-node-runtime)), so the bridge and the Node version evolve independently.
 
-```
-aosp-node-bridge/
-├── node-bridge/          # AAR ①：Kotlin API + JNI 引导件（libnode_bridge.so）+ NAPI addon + 载荷 assets
-├── node-runtime/         # AAR ②：只装 libnode.so（+ libc++_shared.so）+ 版本常量 + 许可
-├── payload/              # Node 侧 JS（唯一事实源，构建期同步进 AAR 的 assets/node-bridge/）
-├── samples/minimal-app/  # 真机探针（P0-1 JIT 矩阵：modern=targetSdk36 / legacy=targetSdk28）
-├── tools/                # build-bridge / provision（八项 ELF 门禁）/ smoke-host / collect-evidence
-├── runtime.lock.json     # ★ 运行时唯一事实源（版本 + SHA-256 + 门禁 + 出处 + 真机记录）
-└── docs/ specs/
-```
+- Architecture/design doc: [`docs/000-工程规划.md`](docs/000-工程规划.md)
+- On-device verification log: [`docs/002-真机验证记录.md`](docs/002-真机验证记录.md)
 
-## 快速开始（本机已可复现）
+## Packages
 
-```bash
-# ① 投放运行时（二进制不入库；八项 ELF 门禁 + SHA-256 硬校验）
-node tools/provision.mjs --out node-runtime/src/main/jniLibs \
-  --from /path/to/libnode.so --allow-page-align-4k        # bring-up 产物是 4 KB 对齐
+| Package | Maven coordinate | Version | Contents |
+|---|---|---|---|
+| Bridge | `io.github.fellow99:node-bridge` | `0.2.0` | Kotlin API, JNI bootstrap (`libnode_bridge.so`), NAPI addon (`libnode_host_client.so`), JS payload |
+| Runtime | `io.github.fellow99:node-runtime` | `24.2.0` | `libnode.so` + `libc++_shared.so` only ([aosp-node-runtime](https://github.com/fellow99/aosp-node-runtime)) |
 
-# ② 编译引导件与 addon（NDK clang 直调，不需要 CMake/ninja）
-node tools/build-bridge.mjs --out node-bridge/src/main/jniLibs/arm64-v8a
+Requirements: `minSdk 24` · `arm64-v8a` · the engine is loaded at runtime (not compile-time).
 
-# ③ host 侧门禁（不接真机）
-node tools/smoke-host.mjs
-
-# ④ 出探针 APK（两个 flavor 对应 P0-1 的判定矩阵对照组）
-gradle :samples:minimal-app:assembleModernDebug
-gradle :samples:minimal-app:assembleLegacyDebug
-
-# ⑤ 真机取证（安装 → autorun → logcat + adb forward + curl /facts）
-bash tools/collect-evidence.sh modern
-```
-
-## 消费方接入三步
+## Quick start
 
 ```kotlin
 // build.gradle.kts
-implementation(project(":node-bridge"))      // 或 io.github.fellow99:node-bridge
-runtimeOnly(project(":node-runtime"))        // 或 io.github.fellow99:node-runtime:24.x.y
+dependencies {
+    implementation("io.github.fellow99:node-bridge:0.2.0")
+    runtimeOnly("io.github.fellow99:node-runtime:24.2.0") // engine, Node-version pinned
+}
+```
 
-// ① 先注册宿主能力，再启动（顺序不能反）
+```kotlin
+// Register host capabilities FIRST, then start (order matters).
 val rt = NodeRuntime.getInstance(context)
-rt.host.register("fs.pickFolder") { argsJson -> /* 主线程执行，返回 JSON */ }
-val r = rt.start(
+
+rt.host.register("fs.pickFolder") { argsJson ->
+    // Runs on the main thread; return a JSON string.
+    """{"ok":true,"path":"/sdcard/Download"}"""
+}
+
+val result = rt.start(
     NodeRuntimeOptions(
-        entry = "bootstrap.js",          // node 直接跑的脚本
-        appEntry = "selfcheck.js",       // bootstrap 解析的业务入口
-        env = mapOf("NODE_BRIDGE_PORT" to "15577"),
+        entry = "bootstrap.js",       // script node runs directly
+        appEntry = "selfcheck.js",    // business entry resolved by bootstrap
+        env = mapOf("MY_CONFIG" to "value"),
     ),
 )
-if (!r.ok) Log.e("app", "${r.state} ${r.message}")   // 失败必须可见
+if (!result.ok) Log.e("node", "${result.state} ${result.message}") // failures stay visible
+
+// Observe lifecycle state: Idle → Starting → Running → Exited/Failed
+rt.state.collect { state -> /* ... */ }
 ```
 
-Node 侧：
+Inside Node, call the host:
 
 ```js
-const host = require('./host.js');            // 由库的 assets 提供（物化到 filesDir 后可 require）
-const info = await host.invoke('fs.pickFolder', { title: '选择目录' });
+const host = require('./host.js');           // provided by the library assets
+const res = await host.invoke('fs.pickFolder', { title: 'Pick a folder' });
+// res === { ok: true, path: '/sdcard/Download' }
 ```
 
-## 已知约束（都会如实上报，不静默降级）
+## How it works
 
-| 约束 | 说明 |
+```
+┌─────────────────────────────── App process ───────────────────────────────┐
+│                                                                            │
+│   Kotlin (NodeRuntime / NodeHostBridge)                                    │
+│        ▲                              │ host requests (JSON over JNI)      │
+│        │ result (JSON)                ▼                                    │
+│   libnode_bridge.so  ◀── slot table ──▶  libnode_host_client.so (NAPI)     │
+│        ▲ dlopen + dlsym                        ▲ process.dlopen            │
+│        │                                       │                            │
+│    libnode.so  (Node.js + V8, from node-runtime)  ◀── bootstrap/host.js    │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **`libnode_bridge.so`** links only `log`/`dl`. It never links `libnode`; it locates the engine with `dlopen` and `node::Start` with `dlsym`, so the bridge is decoupled from the Node version.
+- **`libnode_host_client.so`** is a NAPI addon. Its `napi_*` symbols are intentionally left undefined (`-z undefs`) and resolved at runtime against the already-`dlopen`'d `libnode.so` (`RTLD_GLOBAL`) — guaranteeing Node's own NAPI implementation is used.
+- **JS payload** (`bootstrap.js`, `host.js`, `selfcheck.js`) lives in AAR `assets`, which Android cannot `require` directly. The library materializes it into `filesDir/node-bridge` (idempotent) before start.
+
+## Repository layout
+
+```
+aosp-node-bridge/
+├── node-bridge/             # the AAR: Kotlin API + two .so + JS assets
+│   └── src/main/
+│       ├── cpp/             # node_bridge.c, node_host_client.c, bundled NAPI headers
+│       └── java/org/fellow99/nodebridge/
+├── payload/                 # JS payload (source of truth; copied into AAR assets)
+├── samples/minimal-app/     # on-device probe (modern targetSdk 36 / legacy targetSdk 28)
+├── tools/                   # build-bridge / smoke-host / release-maven / collect-evidence
+└── docs/
+```
+
+## Building locally
+
+The bridge builds with the NDK clang directly (no CMake/ninja required for the default path):
+
+```bash
+# Build the two .so into node-bridge/src/main/jniLibs/arm64-v8a
+node tools/build-bridge.mjs
+
+# Host-side gates without a device (JS syntax + bridge JSON contract)
+node tools/smoke-host.mjs
+
+# Build the probe APK
+gradle :samples:minimal-app:assembleModernDebug
+```
+
+The bundled NAPI headers (`node-bridge/src/main/cpp/include/node/`) are the stable N-API surface and rarely change across Node majors. `libnode.so` itself is never needed at bridge build time.
+
+## Constraints (reported, never silently degraded)
+
+| Constraint | Detail |
 |---|---|
-| `node::Start` **每进程一次** | 崩溃/退出即终态；`NodeState.Exited` 显式建模。可重启的形态是 `:node` 独立进程（规划 §4.9 B） |
-| `assets` **不是文件系统路径** | 载荷必须先物化到 `filesDir`（库已内建 `/node-bridge` 物化，幂等） |
-| JIT 需实测 | `targetSdk ≥ 29` 的 W^X/`execmem` 是唯一可能封死 V8 JIT 的地方 → 探针的 `/facts.jit` 给结论 |
-| `libnode.so` 3 个硬要求 | `ET_DYN` + 无 `PT_INTERP` + 导出 `_ZN4node5StartEiPPc`；`DT_NEEDED` 含 `libc++_shared.so` |
-| addon 需 `DT_NEEDED libnode.so` | 否则 `symbol not found`（`tools/build-bridge.mjs` 已按此链路编译） |
+| `node::Start` is once per process | A crash/exit is terminal (`NodeState.Exited`/`Failed`). A restartable form runs Node in a `:node` process. |
+| `assets/` is not a filesystem path | The payload must be materialized to `filesDir` first (the library does this). |
+| JIT must be verified on device | W^X/`execmem` on modern targetSdk can block V8 JIT. The probe's `/facts.jit` reports the verdict (JIT and WASM verified working on Android 15). |
+| Engine has hard requirements | `libnode.so` must be `ET_DYN`, have no `PT_INTERP`, and export `_ZN4node5StartEiPPc`. |
 
-## 构建环境
+## License
 
-- Gradle 9.4.1 + AGP 9.2.1 + JDK 21；`maven.google.com` 不可达时走阿里云镜像（见 `settings.gradle.kts`）
-- AGP 9 **自带 Kotlin 支持**：不要再应用 `org.jetbrains.kotlin.android`（会争抢 `kotlin` extension）
-- NDK `27.2.12479018`（`tools/build-bridge.mjs` 自动发现，也可 `ANDROID_NDK_HOME` 指定）
-- `compileSdk 36` / `minSdk 24` / `targetSdk` 36（modern）· 28（legacy 对照）/ 仅 `arm64-v8a`
-
-## 许可
-
-本仓库 MIT。`node-runtime` 随包分发 Node.js 运行时，适用其上游许可 —— 见
-[`node-runtime/THIRD-PARTY-NOTICES.md`](node-runtime/THIRD-PARTY-NOTICES.md)（自建产物落地时必须补齐 Node 官方 `LICENSE` 原文）。
+[MIT](LICENSE)
