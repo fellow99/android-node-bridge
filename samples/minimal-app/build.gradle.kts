@@ -12,11 +12,11 @@ plugins {
 // ─────────────────────────────────────────────────────────────────────────────
 
 android {
-    namespace = "dev.fellow99.nodebridge.sample"
+    namespace = "org.fellow99.nodebridge.sample"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "dev.fellow99.nodebridge.sample"
+        applicationId = "org.fellow99.nodebridge.sample"
         minSdk = libs.versions.minSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0"

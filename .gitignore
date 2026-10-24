@@ -33,7 +33,7 @@ google-services.json
 
 # Android Profiling
 *.hprof
-# ── android-node-bridge：运行时二进制不入库（由 tools/provision.mjs 投放）──
+# ── aosp-node-bridge：运行时二进制不入库（由 tools/provision.mjs 投放）──
 node-runtime/src/main/jniLibs/
 node-runtime/include/
 node-bridge/src/main/jniLibs/

@@ -9,7 +9,7 @@ plugins {
 // ─────────────────────────────────────────────────────────────────────────────
 
 android {
-    namespace = "dev.fellow99.noderuntime"
+    namespace = "org.fellow99.noderuntime"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

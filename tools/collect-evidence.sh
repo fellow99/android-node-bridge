@@ -26,8 +26,8 @@ case "$FLAVOR" in
   *) echo "未知 flavor: $FLAVOR（用 modern / legacy）"; exit 1;;
 esac
 
-PKG="dev.fellow99.nodebridge.sample${SUFFIX}"
-ACT="$PKG/dev.fellow99.nodebridge.sample.MainActivity"
+PKG="org.fellow99.nodebridge.sample${SUFFIX}"
+ACT="$PKG/org.fellow99.nodebridge.sample.MainActivity"
 APK="$ROOT/samples/minimal-app/build/outputs/apk/${FLAVOR}/debug/minimal-app-${FLAVOR}-debug.apk"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT="$ROOT/docs/evidence/$STAMP-$FLAVOR"
@@ -46,6 +46,9 @@ fi
 
 say "launch (autorun=1)…"
 "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1
+"$ADB" shell am force-stop org.fellow99.nodebridge.sample.legacy >/dev/null 2>&1
+"$ADB" shell am force-stop org.fellow99.nodebridge.sample.modern >/dev/null 2>&1
+"$ADB" shell "run-as $PKG rm -f files/node-bridge/real_port.txt" >/dev/null 2>&1
 "$ADB" logcat -c >/dev/null 2>&1
 "$ADB" shell am start -n "$ACT" -e autorun 1 2>&1 | tee -a "$OUT/summary.txt"
 
@@ -56,9 +59,14 @@ say "logcat…"
 "$ADB" logcat -d -s NODE_BRIDGE:V AndroidRuntime:E DEBUG:V libc:V > "$OUT/logcat.txt" 2>&1
 
 say "facts（adb forward + curl）…"
-"$ADB" forward tcp:15577 tcp:15577 >/dev/null 2>&1
-curl -s --max-time 20 http://127.0.0.1:15577/facts > "$OUT/facts.json" 2>"$OUT/curl.err" || true
-curl -s --max-time 10 http://127.0.0.1:15577/diag  > "$OUT/diag.json"  2>/dev/null || true
+# 端口：默认 15577；被占时 selfcheck 会回退随机端口并写 real_port.txt
+PORT="$( "$ADB" shell "run-as $PKG cat files/node-bridge/real_port.txt 2>/dev/null | tail -1" | tr -d '
+' )"
+[ -n "$PORT" ] || PORT=15577
+say "port : $PORT"
+"$ADB" forward tcp:$PORT tcp:$PORT >/dev/null 2>&1
+curl -s --max-time 20 http://127.0.0.1:$PORT/facts > "$OUT/facts.json" 2>"$OUT/curl.err" || true
+curl -s --max-time 10 http://127.0.0.1:$PORT/diag  > "$OUT/diag.json"  2>/dev/null || true
 
 say "拉回沙箱日志（debug 包才能 run-as）…"
 "$ADB" shell run-as "$PKG" cat files/node-bridge/node_bridge.log > "$OUT/node_bridge.log" 2>/dev/null || say "（run-as 不可用，日志只能从 logcat 看）"

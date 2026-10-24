@@ -1,4 +1,4 @@
-// android-node-bridge —— Gradle 多模块工程
+// aosp-node-bridge —— Gradle 多模块工程
 //
 // 说明：本机 maven.google.com / dl.google.com 不可达，故镜像前置（阿里云）；
 //      仓库顺序对 CI 无害（镜像 404 时自动回退到官方仓库）。
@@ -23,7 +23,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "android-node-bridge"
+rootProject.name = "aosp-node-bridge"
 
 include(":node-bridge")
 include(":node-runtime")

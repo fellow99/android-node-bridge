@@ -1,4 +1,4 @@
-android-node-bridge / node-runtime —— 第三方组件与许可
+aosp-node-bridge / node-runtime —— 第三方组件与许可
 
 本模块只承载 **Node.js 运行时二进制**（`libnode.so`），不含本仓库自有的可执行代码。
 

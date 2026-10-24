@@ -1,4 +1,4 @@
-package dev.fellow99.nodebridge
+package org.fellow99.nodebridge
 
 import android.content.Context
 import android.os.Handler
@@ -95,6 +95,13 @@ class NodeRuntime private constructor(private val appContext: Context) {
             if (appEntryFile != null) put("NODE_BRIDGE_ENTRY", appEntryFile.absolutePath)
             put("NODE_BRIDGE_LOG", log.absolutePath)
             put("NODE_BRIDGE_CWD", opts.cwd ?: payloadRoot.absolutePath)
+            /* 引导件自身 handle：addon 加载时经 setBridge(handle) 直连槽位表，
+             * 绕开 Android 的 JNI 类加载器命名空间隔离。
+             * 注意：node_host_client.so 的 DT_NEEDED 里有 libnode.so，linker 解析依赖时会把
+             * libnode_bridge.so 的 SONAME 拉进同一命名空间 ⇒ 裸 soname dlopen 兜底通常已命中；
+             * 本注入是「双保险」（host.js 加载 addon 后立即 setBridge）。 */
+            val handle = if (NativeBridge.available) NativeBridge.bridgeHandle() else 0L
+            if (handle != 0L) put("NODE_BRIDGE_BRIDGE_HANDLE", "0x" + handle.toULong().toString(16))
         }.entries.joinToString("\n") { (k, v) -> "$k=$v" }
 
         val nativeLibDir = appContext.applicationInfo.nativeLibraryDir

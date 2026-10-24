@@ -1,4 +1,4 @@
-# android-node-bridge
+# aosp-node-bridge
 
 > **一句话**：把**真正的 Node.js 运行时**以 `JNI 引导 + dlopen + node::Start` 的形态嵌进 **Android 应用自己的进程**，
 > 拆成两个可发布的 AAR —— **`node-bridge`**（接口 + 加载器）与 **`node-runtime`**（只装引擎 `libnode.so`）。
@@ -9,7 +9,7 @@
 ## 目录
 
 ```
-android-node-bridge/
+aosp-node-bridge/
 ├── node-bridge/          # AAR ①：Kotlin API + JNI 引导件（libnode_bridge.so）+ NAPI addon + 载荷 assets
 ├── node-runtime/         # AAR ②：只装 libnode.so（+ libc++_shared.so）+ 版本常量 + 许可
 ├── payload/              # Node 侧 JS（唯一事实源，构建期同步进 AAR 的 assets/node-bridge/）

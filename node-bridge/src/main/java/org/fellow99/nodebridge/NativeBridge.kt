@@ -1,4 +1,4 @@
-package dev.fellow99.nodebridge
+package org.fellow99.nodebridge
 
 /**
  * JNI 桥（模块 002-jni-bootstrap）。
@@ -39,6 +39,9 @@ internal object NativeBridge {
     ): Int
 
     external fun isRunning(): Boolean
+    /** 引导件自身加载对象的 handle（供 NAPI addon 的 setBridge 用，绕开命名空间隔离） */
+    external fun bridgeHandle(): Long
+
     external fun stage(): String
     external fun lastError(): String
     external fun lastCrashJson(): String

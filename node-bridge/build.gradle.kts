@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.fellow99.nodebridge"
+    namespace = "org.fellow99.nodebridge"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

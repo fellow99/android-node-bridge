@@ -1,4 +1,4 @@
-package dev.fellow99.nodebridge
+package org.fellow99.nodebridge
 
 import java.util.concurrent.ConcurrentHashMap
 

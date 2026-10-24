@@ -59,6 +59,7 @@ static char g_home[1024];
 static char g_log_path[1200];
 static char g_addon_dir[1024];
 static char g_env_pairs[4096];
+static volatile int g_no_stdio = 0;  /* 诊断开关：跳过 stdio 重建 */
 
 static char g_stage[32] = "init";
 static char g_last_error[1024];
@@ -481,10 +482,10 @@ static jstring jret(JNIEnv *env, const char *s) {
   return (*env)->NewStringUTF(env, s ? s : "");
 }
 
-/* ── JNI 导出面（类：dev.fellow99.nodebridge.NativeBridge）────────────────── */
+/* ── JNI 导出面（类：org.fellow99.nodebridge.NativeBridge）────────────────── */
 
 JNIEXPORT jint JNICALL
-Java_dev_fellow99_nodebridge_NativeBridge_start(JNIEnv *env, jobject thiz, jstring libDir,
+Java_org_fellow99_nodebridge_NativeBridge_start(JNIEnv *env, jobject thiz, jstring libDir,
                                                 jstring scriptPath, jstring flags, jstring home,
                                                 jstring logPath, jstring addonDir,
                                                 jstring envPairs) {
@@ -532,14 +533,14 @@ Java_dev_fellow99_nodebridge_NativeBridge_start(JNIEnv *env, jobject thiz, jstri
   return 0;
 }
 
-JNIEXPORT jboolean JNICALL Java_dev_fellow99_nodebridge_NativeBridge_isRunning(JNIEnv *env,
+JNIEXPORT jboolean JNICALL Java_org_fellow99_nodebridge_NativeBridge_isRunning(JNIEnv *env,
                                                                               jobject thiz) {
   (void)env;
   (void)thiz;
   return (jboolean)(g_running ? JNI_TRUE : JNI_FALSE);
 }
 
-JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_stage(JNIEnv *env,
+JNIEXPORT jstring JNICALL Java_org_fellow99_nodebridge_NativeBridge_stage(JNIEnv *env,
                                                                          jobject thiz) {
   (void)thiz;
   char buf[32];
@@ -549,7 +550,7 @@ JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_stage(JNIEnv
   return jret(env, buf);
 }
 
-JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_lastError(JNIEnv *env,
+JNIEXPORT jstring JNICALL Java_org_fellow99_nodebridge_NativeBridge_lastError(JNIEnv *env,
                                                                              jobject thiz) {
   (void)thiz;
   char buf[1024];
@@ -559,7 +560,7 @@ JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_lastError(JN
   return jret(env, buf);
 }
 
-JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_lastCrashJson(JNIEnv *env,
+JNIEXPORT jstring JNICALL Java_org_fellow99_nodebridge_NativeBridge_lastCrashJson(JNIEnv *env,
                                                                                  jobject thiz) {
   (void)thiz;
   char buf[2048];
@@ -574,7 +575,7 @@ JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_lastCrashJso
 }
 
 /* 返回 "<id>\x01<name>\x01<args>"；无请求返回 "" */
-JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_pollHostRequest(JNIEnv *env,
+JNIEXPORT jstring JNICALL Java_org_fellow99_nodebridge_NativeBridge_pollHostRequest(JNIEnv *env,
                                                                                    jobject thiz) {
   (void)thiz;
   pthread_once(&g_slot_once, slots_init_once);
@@ -594,7 +595,7 @@ JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_pollHostRequ
 }
 
 JNIEXPORT jint JNICALL
-Java_dev_fellow99_nodebridge_NativeBridge_completeHostRequest(JNIEnv *env, jobject thiz, jlong id,
+Java_org_fellow99_nodebridge_NativeBridge_completeHostRequest(JNIEnv *env, jobject thiz, jlong id,
                                                              jstring resultJson) {
   (void)thiz;
   char result[ANB_RESULT_CAP];
@@ -615,7 +616,20 @@ Java_dev_fellow99_nodebridge_NativeBridge_completeHostRequest(JNIEnv *env, jobje
 }
 
 /* 只做探测，不启动：返回 JSON 字符串（给探针 UI 用） */
-JNIEXPORT jstring JNICALL Java_dev_fellow99_nodebridge_NativeBridge_probe(JNIEnv *env, jobject thiz,
+/* 供 NAPI addon（libnode_host_client.so）setBridge(handle) 用：
+ * 返回引导件自身（当前加载对象）的 handle（取任意本对象符号的地址）。
+ * 为什么需要它：Android 的 JNI 类加载器命名空间把 libnode_bridge.so 与 Node 侧
+ * process.dlopen 的 addon 隔离，dlsym(RTLD_DEFAULT) 搜不到另一命名空间的符号，
+ * 而按路径二次 dlopen 又被 linker 拒绝（"library ... not found"，实测）。
+ * 经 JNI 把 handle 传过去，addon 再 dlsym(handle, "anb_host_call") 即可。 */
+JNIEXPORT jlong JNICALL
+Java_org_fellow99_nodebridge_NativeBridge_bridgeHandle(JNIEnv *env, jobject thiz) {
+  (void)env;
+  (void)thiz;
+  return (jlong)(intptr_t)anb_host_call;
+}
+
+JNIEXPORT jstring JNICALL Java_org_fellow99_nodebridge_NativeBridge_probe(JNIEnv *env, jobject thiz,
                                                                          jstring libDir) {
   (void)thiz;
   char dir[1024];

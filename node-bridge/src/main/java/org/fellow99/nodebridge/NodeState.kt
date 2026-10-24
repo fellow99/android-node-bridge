@@ -1,4 +1,4 @@
-package dev.fellow99.nodebridge
+package org.fellow99.nodebridge
 
 import android.content.Context
 import android.os.Build
@@ -40,8 +40,8 @@ data class NodeRuntimeOptions(
     /** 给出即把 AAR 内 `assets/node-bridge/` 物化到 payloadRoot（幂等），并以其为载荷根 */
     val materializeBuiltinPayload: Boolean = true,
     val argv: List<String> = emptyList(),
-    /** 传给 Node 的启动参数（`node` 之后、脚本之前）；缺省 `--no-verify-heap` */
-    val execArgv: List<String> = listOf("--no-verify-heap"),
+    /** 传给 Node 的启动参数（`node` 之后、脚本之前）；默认空（不带任何 flag） */
+    val execArgv: List<String> = emptyList(),
     val env: Map<String, String> = emptyMap(),
     val cwd: String? = null,
     /** 单次宿主桥 JSON 载荷上限（字节） */
@@ -70,7 +70,7 @@ data class PlatformFacts(
 internal fun NodeRuntime.materializePayload(ctx: Context, opts: NodeRuntimeOptions): File {
     val root = File(opts.payloadRoot ?: File(ctx.filesDir, "node-bridge/payload").absolutePath)
     if (opts.materializeBuiltinPayload) {
-        Env.materializeAssetDir(ctx, "node-bridge", root, marker = "builtin-v1")
+        Env.materializeAssetDir(ctx, "node-bridge", root, marker = "builtin-v2")
     } else if (!root.isDirectory) {
         root.mkdirs()
     }

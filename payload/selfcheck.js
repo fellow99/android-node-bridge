@@ -183,7 +183,7 @@ try {
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
 
-const server = http.createServer((req, res) => {
+const serverHandler = (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   const send = (code, obj) => {
     const body = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
@@ -224,11 +224,26 @@ const server = http.createServer((req, res) => {
     return;
   }
   send(404, { ok: false, error: 'not-found', path: url.pathname });
-});
+};
+
+const server = http.createServer(serverHandler);
 
 server.on('error', (e) => {
-  // 端口冲突是「打崩整个 App」的头号原因（规划 §5.10 ⑧）：记下来，别静默
+  // 端口冲突是「打崩整个 App」的头号原因（规划 §5.10 ⑧）：记下来，别静默；
+  // EADDRINUSE 时回退到随机端口（0），避免双探针/残留进程场景下整条链路静默失效
   console.error(`[selfcheck] listen ${PORT} 失败：${e.code || ''} ${e.message}`);
+  if (e.code === 'EADDRINUSE') {
+    /* 同设备多探针 / 残留监听场景：回退随机端口，并写 real_port.txt 供取证脚本 forward */
+    const fb2 = http.createServer(serverHandler);
+    fb2.listen(0, '127.0.0.1', () => {
+      const real = fb2.address().port;
+      console.log(`[selfcheck] listening http://127.0.0.1:${real}（随机端口；adb forward tcp:${real} tcp:${real} 后取证）`);
+      try {
+        const home = process.env.NODE_BRIDGE_HOME || require('path').join(process.cwd(), '..');
+        require('fs').writeFileSync(require('path').join(home, 'real_port.txt'), `${real}\n`);
+      } catch (_) { /* ignore */ }
+    });
+  }
 });
 
 server.listen(PORT, '127.0.0.1', () => {

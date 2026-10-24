@@ -1,4 +1,4 @@
-package dev.fellow99.nodebridge.sample
+package org.fellow99.nodebridge.sample
 
 import android.app.Activity
 import android.os.Bundle
@@ -11,9 +11,9 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import dev.fellow99.nodebridge.NodeRuntime
-import dev.fellow99.nodebridge.NodeRuntimeOptions
-import dev.fellow99.nodebridge.NodeState
+import org.fellow99.nodebridge.NodeRuntime
+import org.fellow99.nodebridge.NodeRuntimeOptions
+import org.fellow99.nodebridge.NodeState
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -55,8 +55,15 @@ class MainActivity : Activity() {
         startStateTicker()
 
         // 真机/CI 取证入口：`am start -e autorun 1` ⇒ 自动跑「启动 + 读 facts」并把结果打到屏幕与 logcat
-        if (intent?.getBooleanExtra("autorun", false) == true) {
-            ui.postDelayed({ doStart() }, 400)
+        // 注意：`am start -e autorun 1` 里 extra 实际是 String "1"，getBooleanExtra 会 ClassCastException
+        // （MIUI 15 上以 warning 出现，但 autorun 分支被跳过）⇒ 用 getStringExtra 判定。
+        val autorun = intent?.getStringExtra("autorun")?.let { it == "1" || it == "true" } ?: false
+        if (autorun) {
+            ui.postDelayed({
+                // 取证前先清旧载荷（.ready marker 会跳过物化 ⇒ 旧版本 JS 会一直跑）
+                java.io.File(filesDir, "node-bridge/payload").deleteRecursively()
+                doStart()
+            }, 400)
             ui.postDelayed({ doFacts() }, 8000)
         }
     }
@@ -119,7 +126,7 @@ class MainActivity : Activity() {
     }
 
     private fun banner(): String = """
-        |android-node-bridge · 探针
+        |aosp-node-bridge · 探针
         |device : ${android.os.Build.MODEL} / Android ${android.os.Build.VERSION.RELEASE} / API ${android.os.Build.VERSION.SDK_INT}
         |abi    : ${android.os.Build.SUPPORTED_ABIS.joinToString(",")}
         |pkg    : $packageName  (targetSdk=${applicationInfo.targetSdkVersion})
