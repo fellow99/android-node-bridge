@@ -10,9 +10,13 @@ targetSdkLegacy = "28"
 
 ndk = "27.2.12479018"
 
+# Engine package (independent release cadence; version == Node version).
+nodeRuntime = "24.2.0"
+
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+node-runtime = { module = "io.github.fellow99:node-runtime", version.ref = "nodeRuntime" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

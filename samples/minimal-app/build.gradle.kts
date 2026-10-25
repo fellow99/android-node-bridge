@@ -61,5 +61,7 @@ android {
 
 dependencies {
     implementation(project(":node-bridge"))
-    // 引擎包：只装 libnode.so（+ libc++_shared.so）。换 Node 版本不需要动业务代码。
+    // 引擎包：只装 libnode.so（+ libc++ 共享库 + 版本常量资源），从 Maven Central 消费。
+    // 用 runtimeOnly：bridge 编译期不依赖任何引擎符号（-z undefs），引擎可独立换版。
+    runtimeOnly(libs.node.runtime)
 }
