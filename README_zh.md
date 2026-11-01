@@ -14,7 +14,16 @@
 | 包 | Maven 坐标 | 版本 | 内容 |
 |---|---|---|---|
 | Bridge | `io.github.fellow99:node-bridge` | `0.2.0` | Kotlin API、JNI 引导件（`libnode_bridge.so`）、NAPI addon（`libnode_host_client.so`）、JS 载荷 |
-| Runtime | `io.github.fellow99:node-runtime` | `24.2.0` | 仅 `libnode.so` + `libc++_shared.so`（[aosp-node-runtime](https://github.com/fellow99/aosp-node-runtime)） |
+| Runtime | `io.github.fellow99:node-runtime` | `26.13.0` | 仅 `libnode.so` + `libc++_shared.so`（[aosp-node-runtime](https://github.com/fellow99/aosp-node-runtime)） |
+
+### 发布版本 —— Maven Central（`io.github.fellow99:node-bridge`）
+
+> ⚠️ **只发布 AArch64（arm64-v8a）一个架构**——无 x86 / x86_64 / arm32 包。
+
+| 版本 | 操作系统 | 架构 | 链接 |
+|---|---|---|---|
+| 0.1.0 | Android | arm64-v8a | https://repo1.maven.org/maven2/io/github/fellow99/node-bridge/0.1.0/ |
+| 0.2.0 | Android | arm64-v8a | https://repo1.maven.org/maven2/io/github/fellow99/node-bridge/0.2.0/ |
 
 环境要求：`minSdk 24` · `arm64-v8a` · 引擎在运行期加载（而非编译期链接）。
 
@@ -24,7 +33,7 @@
 // build.gradle.kts
 dependencies {
     implementation("io.github.fellow99:node-bridge:0.2.0")
-    runtimeOnly("io.github.fellow99:node-runtime:24.2.0") // 引擎，按 Node 版本钉死
+    runtimeOnly("io.github.fellow99:node-runtime:26.13.0") // 引擎，按 Node 版本钉死
 }
 ```
 
